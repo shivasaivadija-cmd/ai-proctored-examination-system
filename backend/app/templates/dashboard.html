@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard — {{ app_name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f172a;
+      --surface:  #1e293b;
+      --border:   #334155;
+      --primary:  #6366f1;
+      --primary2: #818cf8;
+      --text:     #f1f5f9;
+      --muted:    #94a3b8;
+      --green:    #22c55e;
+      --yellow:   #eab308;
+      --red:      #ef4444;
+      --cyan:     #06b6d4;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: 240px; height: 100vh;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 24px 16px; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
+    .logo-icon { width: 36px; height: 36px; background: var(--primary); border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .logo-text { font-size: 16px; font-weight: 700; color: var(--text); }
+    .logo-sub  { font-size: 11px; color: var(--muted); }
+
+    .nav-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .08em; margin: 20px 8px 8px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+      color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all .15s; text-decoration: none; margin-bottom: 2px; }
+    .nav-item:hover, .nav-item.active { background: rgba(99,102,241,.15); color: var(--text); }
+    .nav-item.active { background: rgba(99,102,241,.15); color: var(--primary2); }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    .sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+    .status-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Main ── */
+    .main { margin-left: 240px; padding: 32px; min-height: 100vh; }
+
+    /* ── Header ── */
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header p  { color: var(--muted); font-size: 14px; margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .badge-live { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3);
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .refresh-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+      padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: all .15s; }
+    .refresh-btn:hover { border-color: var(--primary); color: var(--primary2); }
+
+    /* ── Stat Cards ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; position: relative; overflow: hidden; }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .stat-card.blue::before   { background: linear-gradient(90deg, var(--primary), var(--primary2)); }
+    .stat-card.green::before  { background: linear-gradient(90deg, #16a34a, var(--green)); }
+    .stat-card.yellow::before { background: linear-gradient(90deg, #ca8a04, var(--yellow)); }
+    .stat-card.cyan::before   { background: linear-gradient(90deg, #0891b2, var(--cyan)); }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 32px; font-weight: 800; margin: 8px 0 4px; }
+    .stat-sub   { font-size: 12px; color: var(--muted); }
+    .stat-icon  { position: absolute; top: 20px; right: 20px; font-size: 28px; opacity: .3; }
+
+    /* ── Charts Row ── */
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .chart-card.wide { grid-column: span 2; }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .card-sub   { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── Table ── */
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+    .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .search-box { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 14px; border-radius: 10px; font-size: 13px; width: 220px; outline: none; }
+    .search-box:focus { border-color: var(--primary); }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .06em; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px; font-size: 13px; border-bottom: 1px solid rgba(51,65,85,.5); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(99,102,241,.04); }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary);
+      display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .pill.hire    { background: rgba(34,197,94,.15);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+    .pill.consider{ background: rgba(234,179,8,.15);  color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
+    .pill.reject  { background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+    .pill.active  { background: rgba(99,102,241,.15); color: var(--primary2);border: 1px solid rgba(99,102,241,.3); }
+    .pill.completed{background: rgba(34,197,94,.15);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+    .score-bar { display: flex; align-items: center; gap: 8px; }
+    .score-bar-bg { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+
+    /* ── Domain Breakdown ── */
+    .domain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+    .domain-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .domain-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .domain-name { font-size: 13px; font-weight: 600; }
+    .domain-count{ font-size: 11px; color: var(--muted); }
+    .domain-bar  { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .domain-fill { height: 100%; border-radius: 3px; }
+
+    /* ── API Endpoints ── */
+    .endpoints-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+    .endpoint-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    .method { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; min-width: 44px; text-align: center; }
+    .method.get  { background: rgba(34,197,94,.15);  color: var(--green); }
+    .method.post { background: rgba(99,102,241,.15); color: var(--primary2); }
+    .endpoint-path { font-size: 13px; font-family: monospace; color: var(--text); }
+    .endpoint-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div>
+      <div class="logo-text">InterviewAI</div>
+      <div class="logo-sub">Admin Dashboard</div>
+    </div>
+  </div>
+
+  <div class="nav-label">Overview</div>
+  <a class="nav-item active" href="/dashboard"><span class="nav-icon">📊</span> Dashboard</a>
+  <a class="nav-item" href="/docs"><span class="nav-icon">📡</span> API Docs (Swagger)</a>
+  <a class="nav-item" href="/redoc"><span class="nav-icon">📘</span> ReDoc</a>
+
+  <div class="nav-label">Data</div>
+  <a class="nav-item" href="/dashboard/users"><span class="nav-icon">👥</span> Users</a>
+  <a class="nav-item" href="/dashboard/sessions"><span class="nav-icon">🎤</span> Sessions</a>
+
+  <div class="nav-label">System</div>
+  <a class="nav-item" href="/health"><span class="nav-icon">💚</span> Health Check</a>
+
+  <div class="sidebar-footer">
+    <div style="font-size:12px; color:var(--muted);">
+      <span class="status-dot"></span> Server Running
+    </div>
+    <div style="font-size:11px; color:var(--muted); margin-top:6px;">v1.0.0 · {{ app_name }}</div>
+  </div>
+</aside>
+
+<!-- ── Main Content ── -->
+<main class="main">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>📊 Admin Dashboard</h1>
+      <p>Real-time overview of your AI Interview platform</p>
+    </div>
+    <div class="header-right">
+      <span class="badge-live">● Live</span>
+      <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stats-grid">
+    <div class="stat-card blue">
+      <div class="stat-icon">👥</div>
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value">{{ stats.total_users }}</div>
+      <div class="stat-sub">Registered accounts</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon">🎤</div>
+      <div class="stat-label">Total Sessions</div>
+      <div class="stat-value">{{ stats.total_sessions }}</div>
+      <div class="stat-sub">{{ stats.completed_sessions }} completed · {{ stats.active_sessions }} active</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-label">Avg Score</div>
+      <div class="stat-value">{{ stats.avg_score }}</div>
+      <div class="stat-sub">Out of 10.0</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-icon">✅</div>
+      <div class="stat-label">Hire Rate</div>
+      <div class="stat-value">{{ stats.hire_rate }}%</div>
+      <div class="stat-sub">{{ stats.hire_count }} hire recommendations</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="card-title">Sessions by Domain</div>
+      <div class="card-sub">Interview distribution across roles</div>
+      <div class="chart-wrap">
+        <canvas id="domainChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Score Distribution</div>
+      <div class="card-sub">How candidates are performing</div>
+      <div class="chart-wrap">
+        <canvas id="scoreChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domain Breakdown -->
+  <div style="margin-bottom:8px; font-size:15px; font-weight:600;">Domain Breakdown</div>
+  <div class="domain-grid" style="margin-bottom:24px;">
+    {% for d in domain_stats %}
+    <div class="domain-card">
+      <div class="domain-top">
+        <span class="domain-name">{{ d.icon }} {{ d.label }}</span>
+        <span class="domain-count">{{ d.count }} sessions</span>
+      </div>
+      <div class="domain-bar">
+        <div class="domain-fill" style="width:{{ d.pct }}%; background:{{ d.color }};"></div>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:6px;">Avg score: {{ d.avg_score }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Recent Sessions Table -->
+  <div class="table-card">
+    <div class="table-header">
+      <div>
+        <div class="card-title">Recent Interview Sessions</div>
+        <div class="card-sub" style="margin-bottom:0">Latest {{ sessions|length }} sessions</div>
+      </div>
+      <input class="search-box" placeholder="🔍 Search sessions..." oninput="filterTable(this.value)" />
+    </div>
+    {% if sessions %}
+    <table id="sessionsTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>User</th>
+          <th>Domain</th>
+          <th>Difficulty</th>
+          <th>Questions</th>
+          <th>Score</th>
+          <th>Status</th>
+          <th>Recommendation</th>
+          <th>Started</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td style="color:var(--muted); font-size:12px;">{{ s.id }}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="avatar">{{ s.user_initial }}</div>
+              <div>
+                <div style="font-size:13px; font-weight:500;">{{ s.user_name }}</div>
+                <div style="font-size:11px; color:var(--muted);">{{ s.user_email }}</div>
+              </div>
+            </div>
+          </td>
+          <td><span style="font-size:13px;">{{ s.domain_icon }} {{ s.domain }}</span></td>
+          <td><span style="font-size:12px; color:var(--muted); text-transform:capitalize;">{{ s.difficulty }}</span></td>
+          <td style="text-align:center; font-weight:600;">{{ s.questions_asked }}</td>
+          <td>
+            <div class="score-bar">
+              <span style="font-size:13px; font-weight:700; min-width:28px;">{{ s.score }}</span>
+              <div class="score-bar-bg">
+                <div class="score-bar-fill" style="width:{{ s.score_pct }}%; background:{{ s.score_color }};"></div>
+              </div>
+            </div>
+          </td>
+          <td><span class="pill {{ s.status }}">{{ s.status }}</span></td>
+          <td>
+            {% if s.recommendation %}
+            <span class="pill {{ s.recommendation }}">{{ s.recommendation }}</span>
+            {% else %}
+            <span style="color:var(--muted); font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--muted); font-size:12px;">{{ s.started_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No sessions yet. Start an interview to see data here.</div>
+    {% endif %}
+  </div>
+
+  <!-- Users Table -->
+  <div class="table-card">
+    <div class="table-header">
+      <div>
+        <div class="card-title">Registered Users</div>
+        <div class="card-sub" style="margin-bottom:0">{{ users|length }} total users</div>
+      </div>
+    </div>
+    {% if users %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>User</th>
+          <th>Sessions</th>
+          <th>Avg Score</th>
+          <th>Best Score</th>
+          <th>Joined</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td style="color:var(--muted); font-size:12px;">{{ u.id }}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="avatar">{{ u.initial }}</div>
+              <div>
+                <div style="font-size:13px; font-weight:500;">{{ u.name }}</div>
+                <div style="font-size:11px; color:var(--muted);">{{ u.email }}</div>
+              </div>
+            </div>
+          </td>
+          <td style="font-weight:600;">{{ u.session_count }}</td>
+          <td>
+            <span style="font-weight:700;" data-score="{{ u.avg_score }}">
+              {{ u.avg_score }}
+            </span>
+          </td>
+          <td style="font-weight:600; color:var(--primary2);">{{ u.best_score }}</td>
+          <td style="color:var(--muted); font-size:12px;">{{ u.joined }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No users registered yet.</div>
+    {% endif %}
+  </div>
+
+  <!-- API Endpoints -->
+  <div style="margin-bottom:12px; font-size:15px; font-weight:600;">API Endpoints</div>
+  <div class="endpoints-grid">
+    {% for ep in endpoints %}
+    <div class="endpoint-item">
+      <span class="method {{ ep.method|lower }}">{{ ep.method }}</span>
+      <div>
+        <div class="endpoint-path">{{ ep.path }}</div>
+        <div class="endpoint-desc">{{ ep.desc }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</main>
+
+<script>
+  // ── Domain Doughnut Chart ──
+  const domainCtx = document.getElementById('domainChart').getContext('2d');
+  new Chart(domainCtx, {
+    type: 'doughnut',
+    data: {
+      labels: {{ domain_chart.labels | tojson }},
+      datasets: [{
+        data: {{ domain_chart.data | tojson }},
+        backgroundColor: {{ domain_chart.colors | tojson }},
+        borderWidth: 2,
+        borderColor: '#1e293b',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 12 }, padding: 12 } }
+      }
+    }
+  });
+
+  // ── Score Bar Chart ──
+  const scoreCtx = document.getElementById('scoreChart').getContext('2d');
+  new Chart(scoreCtx, {
+    type: 'bar',
+    data: {
+      labels: {{ score_chart.labels | tojson }},
+      datasets: [{
+        label: 'Sessions',
+        data: {{ score_chart.data | tojson }},
+        backgroundColor: 'rgba(99,102,241,0.6)',
+        borderColor: '#6366f1',
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,.5)' } },
+        y: { ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: 'rgba(51,65,85,.5)' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ── Color avg scores ──
+  document.querySelectorAll('[data-score]').forEach(el => {
+    const s = parseFloat(el.dataset.score);
+    el.style.color = s >= 7 ? 'var(--green)' : s >= 5 ? 'var(--yellow)' : 'var(--red)';
+  });
+
+  // ── Table Search ──
+  function filterTable(q) {
+    const rows = document.querySelectorAll('#sessionsTable tbody tr');
+    rows.forEach(r => {
+      r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+    });
+  }
+</script>
+</body>
+</html>
